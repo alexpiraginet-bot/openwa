@@ -68,7 +68,12 @@ import {
   ONBOARDING_DEFAULT_CONTINUE_LABEL,
 } from './wwebjs-onboarding';
 import { wwebjsGroupUpdateChanges, wwebjsGroupRecipientIds } from './wwebjs-group-events';
-import { BACKPORT_MISSING_MESSAGE, isBackportMissing } from './wwebjs-backport-check';
+import {
+  BACKPORT_MISSING_MESSAGE,
+  isBackportMissing,
+  isMediaIdBackportMissing,
+  MEDIA_ID_BACKPORT_MISSING_MESSAGE,
+} from './wwebjs-backport-check';
 import {
   capInboundMedia,
   coerceDeclaredSize,
@@ -337,6 +342,10 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     // (#889) — say so here instead, while the operator is still looking at the startup logs.
     if (isBackportMissing()) {
       this.logger.error(BACKPORT_MISSING_MESSAGE);
+    }
+    // Same for the media-id backport: without it every media send is a bare 500 while text works.
+    if (isMediaIdBackportMissing()) {
+      this.logger.error(MEDIA_ID_BACKPORT_MISSING_MESSAGE);
     }
 
     try {

@@ -43,3 +43,38 @@ export function isBackportMissing(wwjsDir?: string): boolean {
     return false;
   }
 }
+
+/**
+ * Startup guard for the media-id backport that scripts/patch-wwebjs-media-id.js applies at install
+ * time (whatsapp-web.js PR #201923).
+ *
+ * The WhatsApp Web builds rolled out on 2026-09-17 give the media model an enumerable private
+ * `__x_id`; whatsapp-web.js 1.34.7 spreads that model over the outgoing message and the id is lost,
+ * so every image, video, audio and document send fails with "Data passed to getter must include an
+ * id property" — which API clients only ever see as a bare 500 — while text keeps working. A source
+ * install that ran with `--ignore-scripts`, or whose best-effort patch run stood down on a changed
+ * Utils.js, would carry on unpatched with nothing in the logs to say why media broke.
+ *
+ * Same contract as isBackportMissing: flag only a tree we can read AND recognise (the unique
+ * anchor comment the patcher keys on is present) that has no `delete message.__x_id` — ours or an
+ * upstream variant of it. Anything uncertain reads as false.
+ */
+const MEDIA_ID_ANCHOR = "// Bot's won't reply if canonicalUrl is set (linking)";
+const MEDIA_ID_FIX_MARKER = /delete message\.__x_id/;
+
+export const MEDIA_ID_BACKPORT_MISSING_MESSAGE =
+  'The installed whatsapp-web.js is missing the media-id backport this build requires. On WhatsApp ' +
+  'Web builds from 2026-09-17 onward every image, video, audio and document send fails with "Data ' +
+  'passed to getter must include an id property" (a bare 500 to API clients) while text keeps ' +
+  'working. Apply it with `node scripts/patch-wwebjs-media-id.js` (or reinstall with `npm install`) ' +
+  'and restart.';
+
+export function isMediaIdBackportMissing(wwjsDir?: string): boolean {
+  try {
+    const dir = wwjsDir ?? path.dirname(require.resolve('whatsapp-web.js/package.json'));
+    const source = fs.readFileSync(path.join(dir, 'src', 'util', 'Injected', 'Utils.js'), 'utf8');
+    return source.includes(MEDIA_ID_ANCHOR) && !MEDIA_ID_FIX_MARKER.test(source);
+  } catch {
+    return false;
+  }
+}

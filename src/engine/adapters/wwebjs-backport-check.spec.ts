@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { isBackportMissing } from './wwebjs-backport-check';
+import { isBackportMissing, isMediaIdBackportMissing } from './wwebjs-backport-check';
 
 /**
  * Guards the startup diagnostic for an unpatched whatsapp-web.js (#889). The cost of getting this
@@ -47,5 +47,53 @@ describe('isBackportMissing', () => {
     // map on a future whatsapp-web.js would do it — would retire the check without failing anything.
     const installed = path.dirname(require.resolve('whatsapp-web.js/package.json'));
     expect(fs.existsSync(path.join(installed, 'src', 'structures', 'Message.js'))).toBe(true);
+  });
+});
+
+/**
+ * Guards the startup diagnostic for a whatsapp-web.js without the media-id backport (media sends
+ * broken on the WhatsApp Web builds of 2026-09-17). Same stakes as above, in both directions.
+ */
+describe('isMediaIdBackportMissing', () => {
+  const tmpDirs: string[] = [];
+  const ANCHOR = "        // Bot's won't reply if canonicalUrl is set (linking)\n";
+
+  /** A whatsapp-web.js install stubbed down to the one file the check reads. */
+  function install(utilsJs: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wwjs-media-id-'));
+    tmpDirs.push(dir);
+    fs.mkdirSync(path.join(dir, 'src', 'util', 'Injected'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'src', 'util', 'Injected', 'Utils.js'), utilsJs);
+    return dir;
+  }
+
+  afterAll(() => {
+    for (const dir of tmpDirs) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('flags a recognised tree that does not strip the media model id', () => {
+    expect(isMediaIdBackportMissing(install(`        };\n\n${ANCHOR}        if (botOptions) {\n`))).toBe(true);
+  });
+
+  it('accepts the shape our patcher lands', () => {
+    expect(
+      isMediaIdBackportMissing(install(`        };\n\n        delete message.__x_id;\n\n${ANCHOR}`)),
+    ).toBe(false);
+  });
+
+  it('accepts an upstream fix that guards the delete', () => {
+    expect(
+      isMediaIdBackportMissing(install(`        if (message.__x_id) delete message.__x_id;\n${ANCHOR}`)),
+    ).toBe(false);
+  });
+
+  it('stays quiet about a tree it does not recognise or cannot inspect', () => {
+    expect(isMediaIdBackportMissing(install('module.exports = {};\n'))).toBe(false);
+    expect(isMediaIdBackportMissing(path.join(os.tmpdir(), 'wwjs-not-installed-here'))).toBe(false);
+  });
+
+  it('can reach the file it reads in a real install', () => {
+    const installed = path.dirname(require.resolve('whatsapp-web.js/package.json'));
+    expect(fs.existsSync(path.join(installed, 'src', 'util', 'Injected', 'Utils.js'))).toBe(true);
   });
 });
