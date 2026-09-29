@@ -106,18 +106,23 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
+# Backport the upstream whatsapp-web.js media-id fix (PR #201923, OpenWA upstream cf2bf9a4): WhatsApp
+# Web builds since 2026-09-17 add a private __x_id to the media model, which clobbers the outgoing
+# message id and makes every image/video/audio/document send fail with "Data passed to getter must
+# include an id property" while text keeps working. The patcher self-disables once upstream ships it.
 # Backport upstream whatsapp-web.js#201832 (id._serialized -> id.$1 normalization,
 # broken by WA Web 2.3000.x ~2026-07-14) into the installed dep at build time.
 # The patcher self-disables once whatsapp-web.js ships the fix upstream.
 # scripts/postinstall.js rides along: `npm ci` below runs the hook, which fails
 # when the file is missing. With the patcher present the hook applies it in
 # --best-effort mode; the explicit fatal run right after is the real gate.
-COPY scripts/postinstall.js scripts/patch-wwebjs-201832.js scripts/wwebjs-201832.patch scripts/patch-wwebjs-newsletter-preview.js ./scripts/
+COPY scripts/postinstall.js scripts/patch-wwebjs-201832.js scripts/wwebjs-201832.patch scripts/patch-wwebjs-newsletter-preview.js scripts/patch-wwebjs-media-id.js ./scripts/
 
 # Install production dependencies only, then apply the backports.
 RUN npm ci --omit=dev \
     && node scripts/patch-wwebjs-201832.js \
     && node scripts/patch-wwebjs-newsletter-preview.js \
+    && node scripts/patch-wwebjs-media-id.js \
     && npm cache clean --force
 
 # Replace the npm the base image bundles. npm is not on the request path — the entrypoint runs

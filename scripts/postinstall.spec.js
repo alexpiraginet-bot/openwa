@@ -18,10 +18,10 @@ const { planSteps, failureReason, run } = require('./postinstall.js');
 const OK = { status: 0, signal: null, error: null };
 
 /** Bare temp dir optionally holding a dashboard/ and/or the patch script. */
-function makeRoot({ dashboard = false, patcher = false, previewPatcher = false } = {}) {
+function makeRoot({ dashboard = false, patcher = false, previewPatcher = false, mediaIdPatcher = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openwa-postinstall-'));
   if (dashboard) fs.mkdirSync(path.join(root, 'dashboard'));
-  if (patcher || previewPatcher) {
+  if (patcher || previewPatcher || mediaIdPatcher) {
     fs.mkdirSync(path.join(root, 'scripts'));
   }
   if (patcher) {
@@ -29,6 +29,9 @@ function makeRoot({ dashboard = false, patcher = false, previewPatcher = false }
   }
   if (previewPatcher) {
     fs.writeFileSync(path.join(root, 'scripts', 'patch-wwebjs-newsletter-preview.js'), '// stub\n');
+  }
+  if (mediaIdPatcher) {
+    fs.writeFileSync(path.join(root, 'scripts', 'patch-wwebjs-media-id.js'), '// stub\n');
   }
   return root;
 }
@@ -85,6 +88,17 @@ test('planSteps: dashboard and both patchers run in stable order', () => {
   assert.equal(steps[0].command, 'npm run dashboard:ci');
   assert.match(steps[1].args[0], /patch-wwebjs-201832\.js$/);
   assert.match(steps[2].args[0], /patch-wwebjs-newsletter-preview\.js$/);
+});
+
+test('planSteps: media id patcher plans its own best-effort backport, after the others', () => {
+  const only = planSteps(makeRoot({ mediaIdPatcher: true }));
+  assert.equal(only.length, 1);
+  assert.match(only[0].args[0], /patch-wwebjs-media-id\.js$/);
+  assert.deepEqual(only[0].args.slice(1), ['--best-effort']);
+
+  const all = planSteps(makeRoot({ dashboard: true, patcher: true, previewPatcher: true, mediaIdPatcher: true }));
+  assert.equal(all.length, 4);
+  assert.match(all[3].args[0], /patch-wwebjs-media-id\.js$/);
 });
 
 test('run: nothing to do exits 0 and never spawns', () => {
