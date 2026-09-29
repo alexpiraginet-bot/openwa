@@ -1,7 +1,7 @@
 /**
  * Post-install hook (npm `postinstall`).
  *
- * Three conditional steps, each skipped when its target is absent so the hook is a no-op where the
+ * Four conditional steps, each skipped when its target is absent so the hook is a no-op where the
  * piece is missing (the Docker builder stage copies package*.json long before any source):
  *
  *   1. `npm run dashboard:ci` when dashboard/ exists — the dashboard carries its own lockfile and
@@ -15,6 +15,8 @@
  *      tree — which must never be waved through. So a non-zero status here is propagated as-is.
  *   3. `node scripts/patch-wwebjs-newsletter-preview.js --best-effort` when present. The production
  *      Docker stage runs it again without best-effort, making dependency drift a build failure.
+ *   4. `node scripts/patch-wwebjs-media-id.js --best-effort` when present (media sends broke on the
+ *      WhatsApp Web builds of 2026-09-17). Same contract: the Docker stage re-runs it fatally.
  *
  * Structured like scripts/patch-wwebjs-201832.js: pure planning + injectable spawn, so the spec
  * (scripts/postinstall.spec.js, node:test) exercises every branch without a real npm run.
@@ -52,6 +54,15 @@ function planSteps(root) {
       name: 'whatsapp-web.js newsletter preview backport (scripts/patch-wwebjs-newsletter-preview.js --best-effort)',
       command: process.execPath,
       args: [previewPatcher, '--best-effort'],
+      options: { stdio: 'inherit', cwd: root },
+    });
+  }
+  const mediaIdPatcher = path.join(root, 'scripts', 'patch-wwebjs-media-id.js');
+  if (fs.existsSync(mediaIdPatcher)) {
+    steps.push({
+      name: 'whatsapp-web.js media id backport (scripts/patch-wwebjs-media-id.js --best-effort)',
+      command: process.execPath,
+      args: [mediaIdPatcher, '--best-effort'],
       options: { stdio: 'inherit', cwd: root },
     });
   }

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Media sends work again on the whatsapp-web.js engine.** Since the WhatsApp Web builds rolled out on
+  2026-09-17, every image, video, audio and document send failed with the page error "Data passed to
+  getter must include an id property (it's how we memoize) but got undefined" — surfaced to API clients
+  as a bare `500 Internal server error` — while text kept working. whatsapp-web.js 1.34.7 builds the
+  outgoing message with `id: newMsgKey` and then spreads the media model into it; those builds give the
+  model an enumerable private `__x_id` that clobbers the id. Backports the one-line fix from
+  whatsapp-web.js PR #201923 (same patcher as upstream OpenWA cf2bf9a4 / v0.23.6):
+  `scripts/patch-wwebjs-media-id.js`, run by `postinstall` (best-effort) and fatally in the Docker build,
+  self-disabling once the installed whatsapp-web.js carries the line.
+
 ## [0.12.5] - 2026-08-03
 
 The follow-up to 0.12.4, and the end of the decomposition work. **Nothing here is visible to a user or
